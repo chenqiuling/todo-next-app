@@ -1,6 +1,6 @@
-# 待办事项 Next.js 版
+# 待办事项
 
-这是从单文件 HTML 改造出的 Next.js + React + TypeScript 项目。
+Next.js + React + TypeScript 项目。
 
 ## 功能
 
@@ -24,3 +24,6 @@ npm run dev
 ```
 
 默认访问 `http://localhost:3000`。
+
+## 预览效果
+<img width="401" height="485" alt="image" src="https://github.com/user-attachments/assets/a70ee30b-8263-4862-8de3-959225c75871" />
