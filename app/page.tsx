@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Todo, TodoData } from "@/types/todo";
+import type { Todo, TodoData, TodoSchedule } from "@/types/todo";
 
 const emptyData: TodoData = {
   todos: [],
@@ -25,7 +25,14 @@ type IncomingTodo = {
   name: unknown;
   completed?: unknown;
   createdAt?: unknown;
+  schedule?: unknown;
 };
+
+const defaultSchedule: TodoSchedule = {
+  mode: "daily",
+};
+
+const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 type FilePickerAcceptType = {
   description?: string;
@@ -77,13 +84,111 @@ function formatDate(value: string | null) {
   return value || "--";
 }
 
-function createTodo(name: string): Todo {
+function normalizeSchedule(value: unknown): TodoSchedule {
+  if (!value || typeof value !== "object") {
+    return defaultSchedule;
+  }
+
+  const source = value as {
+    mode?: unknown;
+    weekStart?: unknown;
+    weekEnd?: unknown;
+    monthDay?: unknown;
+    time?: unknown;
+  };
+  const mode =
+    source.mode === "weekly" || source.mode === "monthly"
+      ? source.mode
+      : "daily";
+  const schedule: TodoSchedule = { mode };
+
+  if (mode === "weekly") {
+    schedule.weekStart =
+      typeof source.weekStart === "number" && source.weekStart >= 0 && source.weekStart <= 6
+        ? Math.floor(source.weekStart)
+        : 1;
+    schedule.weekEnd =
+      typeof source.weekEnd === "number" && source.weekEnd >= 0 && source.weekEnd <= 6
+        ? Math.floor(source.weekEnd)
+        : 5;
+  }
+
+  if (mode === "monthly") {
+    schedule.monthDay =
+      typeof source.monthDay === "number" && source.monthDay >= 1 && source.monthDay <= 31
+        ? Math.floor(source.monthDay)
+        : 1;
+  }
+
+  if (typeof source.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(source.time)) {
+    schedule.time = source.time;
+  }
+
+  return schedule;
+}
+
+function createTodo(name: string, schedule: TodoSchedule): Todo {
   return {
     id: crypto.randomUUID(),
     name: name.trim(),
     completed: false,
     createdAt: Date.now(),
+    schedule: normalizeSchedule(schedule),
   };
+}
+
+function isWeekdayInRange(day: number, start: number, end: number) {
+  if (start <= end) {
+    return day >= start && day <= end;
+  }
+
+  return day >= start || day <= end;
+}
+
+function isTimeReached(schedule: TodoSchedule, now: Date) {
+  if (!schedule.time) {
+    return true;
+  }
+
+  const current = `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}`;
+  return current >= schedule.time;
+}
+
+function isTodoDue(todo: Todo, now: Date) {
+  const schedule = normalizeSchedule(todo.schedule);
+
+  if (schedule.mode === "weekly") {
+    const start = schedule.weekStart ?? 1;
+    const end = schedule.weekEnd ?? 5;
+    return isWeekdayInRange(now.getDay(), start, end) && isTimeReached(schedule, now);
+  }
+
+  if (schedule.mode === "monthly") {
+    return now.getDate() === (schedule.monthDay ?? 1) && isTimeReached(schedule, now);
+  }
+
+  return isTimeReached(schedule, now);
+}
+
+function getScheduleLabel(todo: Todo) {
+  const schedule = normalizeSchedule(todo.schedule);
+  let label = "每天";
+
+  if (schedule.mode === "weekly") {
+    label = `${weekDays[schedule.weekStart ?? 1]}至${weekDays[schedule.weekEnd ?? 5]}`;
+  }
+
+  if (schedule.mode === "monthly") {
+    label = `每月 ${schedule.monthDay ?? 1} 号`;
+  }
+
+  return schedule.time ? `${label} ${schedule.time}` : label;
+}
+
+function getScheduleKey(schedule: TodoSchedule) {
+  return JSON.stringify(normalizeSchedule(schedule));
 }
 
 function sortTodos(todos: Todo[]) {
@@ -123,6 +228,7 @@ function normalizeImportData(value: unknown): TodoData | null {
       completed: typeof todo.completed === "boolean" ? todo.completed : false,
       createdAt:
         typeof todo.createdAt === "number" ? todo.createdAt : Date.now(),
+      schedule: normalizeSchedule(todo.schedule),
     }))
     .filter((todo) => todo.name.length > 0);
 
@@ -254,23 +360,144 @@ async function writeTodoDataToFile(
   await writable.close();
 }
 
+type ScheduleFieldsProps = {
+  schedule: TodoSchedule;
+  onChange: (schedule: TodoSchedule) => void;
+  className?: string;
+};
+
+function ScheduleFields({
+  schedule,
+  onChange,
+  className = "",
+}: ScheduleFieldsProps) {
+  const normalized = normalizeSchedule(schedule);
+
+  function updateMode(mode: TodoSchedule["mode"]) {
+    const time = normalized.time;
+
+    if (mode === "weekly") {
+      onChange({ mode, weekStart: 1, weekEnd: 5, time });
+      return;
+    }
+
+    if (mode === "monthly") {
+      onChange({ mode, monthDay: new Date().getDate(), time });
+      return;
+    }
+
+    onChange({ mode, time });
+  }
+
+  function updateSchedule(patch: Partial<TodoSchedule>) {
+    onChange(normalizeSchedule({ ...normalized, ...patch }));
+  }
+
+  return (
+    <div className={`schedule-fields ${className}`}>
+      <label>
+        <span>重复</span>
+        <select
+          value={normalized.mode}
+          onChange={(event) =>
+            updateMode(event.target.value as TodoSchedule["mode"])
+          }
+        >
+          <option value="daily">每天</option>
+          <option value="weekly">每周</option>
+          <option value="monthly">每月</option>
+        </select>
+      </label>
+
+      {normalized.mode === "weekly" && (
+        <>
+          <label>
+            <span>从</span>
+            <select
+              value={normalized.weekStart ?? 1}
+              onChange={(event) =>
+                updateSchedule({ weekStart: Number(event.target.value) })
+              }
+            >
+              {weekDays.map((day, index) => (
+                <option key={day} value={index}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>到</span>
+            <select
+              value={normalized.weekEnd ?? 5}
+              onChange={(event) =>
+                updateSchedule({ weekEnd: Number(event.target.value) })
+              }
+            >
+              {weekDays.map((day, index) => (
+                <option key={day} value={index}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
+
+      {normalized.mode === "monthly" && (
+        <label>
+          <span>每月</span>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={normalized.monthDay ?? 1}
+            onChange={(event) =>
+              updateSchedule({ monthDay: Number(event.target.value) })
+            }
+          />
+          <span>号</span>
+        </label>
+      )}
+
+      <label>
+        <span>时间</span>
+        <input
+          type="time"
+          value={normalized.time ?? ""}
+          onChange={(event) =>
+            updateSchedule({ time: event.target.value || undefined })
+          }
+        />
+      </label>
+    </div>
+  );
+}
+
 export default function Home() {
   const [data, setData] = useState<TodoData>(emptyData);
   const [localDbHandle, setLocalDbHandle] =
     useState<LocalFileSystemFileHandle | null>(null);
   const [newTodo, setNewTodo] = useState("");
+  const [newSchedule, setNewSchedule] =
+    useState<TodoSchedule>(defaultSchedule);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingSchedule, setEditingSchedule] =
+    useState<TodoSchedule>(defaultSchedule);
   const [toast, setToast] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [canUseLocalFile, setCanUseLocalFile] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sortedTodos = useMemo(() => sortTodos(data.todos), [data.todos]);
-  const completedTodos = sortedTodos.filter((todo) => todo.completed);
-  const activeTodos = sortedTodos.filter((todo) => !todo.completed);
+  const dueTodos = sortedTodos.filter((todo) => isTodoDue(todo, now));
+  const upcomingTodos = sortedTodos.filter((todo) => !isTodoDue(todo, now));
+  const completedTodos = dueTodos.filter((todo) => todo.completed);
+  const activeTodos = dueTodos.filter((todo) => !todo.completed);
 
   function showToast(message: string, duration = 1500) {
     setToast(message);
@@ -406,9 +633,10 @@ export default function Home() {
     try {
       await saveData({
         ...data,
-        todos: [...data.todos, createTodo(name)],
+        todos: [...data.todos, createTodo(name, newSchedule)],
       });
       setNewTodo("");
+      setNewSchedule(defaultSchedule);
       showToast("已添加", 900);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "添加失败", 1500);
@@ -447,6 +675,7 @@ export default function Home() {
   function startEdit(todo: Todo) {
     setEditingId(todo.id);
     setEditingName(todo.name);
+    setEditingSchedule(normalizeSchedule(todo.schedule));
   }
 
   async function saveEdit(id: string) {
@@ -458,7 +687,16 @@ export default function Home() {
     }
 
     const current = data.todos.find((todo) => todo.id === id);
-    if (!current || current.name === name) {
+    if (!current) {
+      setEditingId(null);
+      return;
+    }
+
+    if (
+      current.name === name &&
+      getScheduleKey(normalizeSchedule(current.schedule)) ===
+        getScheduleKey(editingSchedule)
+    ) {
       setEditingId(null);
       return;
     }
@@ -467,7 +705,9 @@ export default function Home() {
       await saveData({
         ...data,
         todos: data.todos.map((todo) =>
-          todo.id === id ? { ...todo, name } : todo,
+          todo.id === id
+            ? { ...todo, name, schedule: normalizeSchedule(editingSchedule) }
+            : todo,
         ),
       });
       showToast("已更新", 900);
@@ -493,6 +733,21 @@ export default function Home() {
       showToast("导出成功", 1500);
     } catch {
       showToast("导出失败", 1500);
+    }
+  }
+
+  async function copyExportData() {
+    const json = JSON.stringify(data, null, 2);
+
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("当前浏览器不支持剪贴板复制");
+      }
+
+      await navigator.clipboard.writeText(json);
+      showToast("JSON 已复制", 1200);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "复制失败", 1800);
     }
   }
 
@@ -554,6 +809,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -586,6 +846,9 @@ export default function Home() {
             <button className="btn-export" type="button" onClick={exportData}>
               📤 导出
             </button>
+            <button className="btn-copy" type="button" onClick={copyExportData}>
+              📋 复制
+            </button>
             <button
               className="btn-import"
               type="button"
@@ -611,9 +874,12 @@ export default function Home() {
           </button>
         </section>
 
+        <ScheduleFields schedule={newSchedule} onChange={setNewSchedule} />
+
         <section className="stats">
           <span>
-            共 {data.todos.length} 项 · 已完成 {completedTodos.length} 项
+            今日 {dueTodos.length} 项 · 已完成 {completedTodos.length} 项 · 未到{" "}
+            {upcomingTodos.length} 项
           </span>
           <span className="clear-date">
             {localDbHandle ? localDbHandle.name : "浏览器本地"} · 上次清除:{" "}
@@ -636,7 +902,9 @@ export default function Home() {
                 todo={todo}
                 editingId={editingId}
                 editingName={editingName}
+                editingSchedule={editingSchedule}
                 setEditingName={setEditingName}
+                setEditingSchedule={setEditingSchedule}
                 startEdit={startEdit}
                 saveEdit={saveEdit}
                 handleEditKeyDown={handleEditKeyDown}
@@ -657,12 +925,40 @@ export default function Home() {
                     todo={todo}
                     editingId={editingId}
                     editingName={editingName}
+                    editingSchedule={editingSchedule}
                     setEditingName={setEditingName}
+                    setEditingSchedule={setEditingSchedule}
                     startEdit={startEdit}
                     saveEdit={saveEdit}
                     handleEditKeyDown={handleEditKeyDown}
                     toggleTodo={toggleTodo}
                     deleteTodo={deleteTodo}
+                  />
+                ))}
+              </>
+            )}
+
+            {upcomingTodos.length > 0 && (
+              <>
+                <div className="divider">
+                  未到日期{" "}
+                  <span className="count">({upcomingTodos.length})</span>
+                </div>
+                {upcomingTodos.map((todo) => (
+                  <TodoItem
+                    key={todo.id}
+                    todo={todo}
+                    editingId={editingId}
+                    editingName={editingName}
+                    editingSchedule={editingSchedule}
+                    setEditingName={setEditingName}
+                    setEditingSchedule={setEditingSchedule}
+                    startEdit={startEdit}
+                    saveEdit={saveEdit}
+                    handleEditKeyDown={handleEditKeyDown}
+                    toggleTodo={toggleTodo}
+                    deleteTodo={deleteTodo}
+                    isUpcoming
                   />
                 ))}
               </>
@@ -687,7 +983,9 @@ type TodoItemProps = {
   todo: Todo;
   editingId: string | null;
   editingName: string;
+  editingSchedule: TodoSchedule;
   setEditingName: (value: string) => void;
+  setEditingSchedule: (value: TodoSchedule) => void;
   startEdit: (todo: Todo) => void;
   saveEdit: (id: string) => Promise<void>;
   handleEditKeyDown: (
@@ -696,67 +994,86 @@ type TodoItemProps = {
   ) => void;
   toggleTodo: (todo: Todo) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
+  isUpcoming?: boolean;
 };
 
 function TodoItem({
   todo,
   editingId,
   editingName,
+  editingSchedule,
   setEditingName,
+  setEditingSchedule,
   startEdit,
   saveEdit,
   handleEditKeyDown,
   toggleTodo,
   deleteTodo,
+  isUpcoming = false,
 }: TodoItemProps) {
   const isEditing = editingId === todo.id;
 
   return (
-    <article className={`todo-item ${todo.completed ? "completed" : ""}`}>
-      <input
-        className="todo-checkbox"
-        type="checkbox"
-        checked={todo.completed}
-        onChange={() => toggleTodo(todo)}
-      />
-      {isEditing ? (
+    <article
+      className={`todo-item ${todo.completed ? "completed" : ""} ${
+        isUpcoming ? "upcoming" : ""
+      }`}
+    >
+      <div className="todo-row">
         <input
-          className="todo-name-input"
-          type="text"
-          value={editingName}
-          maxLength={120}
-          autoFocus
-          onChange={(event) => setEditingName(event.target.value)}
-          onBlur={() => saveEdit(todo.id)}
-          onKeyDown={(event) => handleEditKeyDown(event, todo.id)}
+          className="todo-checkbox"
+          type="checkbox"
+          checked={todo.completed}
+          disabled={isUpcoming}
+          title={isUpcoming ? "未到日期" : undefined}
+          onChange={() => toggleTodo(todo)}
         />
-      ) : (
-        <button
-          className="todo-name"
-          type="button"
-          onClick={() => startEdit(todo)}
-        >
-          {todo.name}
-        </button>
-      )}
-      <div className="todo-actions">
-        <button
-          className="btn-edit"
-          type="button"
-          title="编辑"
-          onClick={() => startEdit(todo)}
-        >
-          ✎
-        </button>
-        <button
-          className="btn-delete"
-          type="button"
-          title="删除"
-          onClick={() => deleteTodo(todo.id)}
-        >
-          ✕
-        </button>
+        {isEditing ? (
+          <input
+            className="todo-name-input"
+            type="text"
+            value={editingName}
+            maxLength={120}
+            autoFocus
+            onChange={(event) => setEditingName(event.target.value)}
+            onKeyDown={(event) => handleEditKeyDown(event, todo.id)}
+          />
+        ) : (
+          <button
+            className="todo-name"
+            type="button"
+            onClick={() => startEdit(todo)}
+          >
+            <span className="todo-title">{todo.name}</span>
+            <span className="todo-schedule">{getScheduleLabel(todo)}</span>
+          </button>
+        )}
+        <div className="todo-actions">
+          <button
+            className="btn-edit"
+            type="button"
+            title={isEditing ? "保存" : "编辑"}
+            onClick={() => (isEditing ? saveEdit(todo.id) : startEdit(todo))}
+          >
+            {isEditing ? "✓" : "✎"}
+          </button>
+          <button
+            className="btn-delete"
+            type="button"
+            title="删除"
+            onClick={() => deleteTodo(todo.id)}
+          >
+            ✕
+          </button>
+        </div>
       </div>
+      {isEditing && (
+        <ScheduleFields
+          className="todo-edit-schedule"
+          schedule={editingSchedule}
+          onChange={setEditingSchedule}
+        />
+      )}
     </article>
   );
 }
