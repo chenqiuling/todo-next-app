@@ -55,13 +55,21 @@ type LocalFileSystemFileHandle = {
   name: string;
   getFile: () => Promise<File>;
   createWritable: () => Promise<LocalFileSystemWritableFileStream>;
-  queryPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
-  requestPermission?: (descriptor?: { mode?: "read" | "readwrite" }) => Promise<PermissionState>;
+  queryPermission?: (descriptor?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<PermissionState>;
 };
 
 type LocalFilePickerWindow = Window & {
-  showOpenFilePicker?: (options?: FilePickerOptions) => Promise<LocalFileSystemFileHandle[]>;
-  showSaveFilePicker?: (options?: FilePickerOptions) => Promise<LocalFileSystemFileHandle>;
+  showOpenFilePicker?: (
+    options?: FilePickerOptions,
+  ) => Promise<LocalFileSystemFileHandle[]>;
+  showSaveFilePicker?: (
+    options?: FilePickerOptions,
+  ) => Promise<LocalFileSystemFileHandle>;
 };
 
 const jsonPickerTypes: FilePickerAcceptType[] = [
@@ -104,23 +112,32 @@ function normalizeSchedule(value: unknown): TodoSchedule {
 
   if (mode === "weekly") {
     schedule.weekStart =
-      typeof source.weekStart === "number" && source.weekStart >= 0 && source.weekStart <= 6
+      typeof source.weekStart === "number" &&
+      source.weekStart >= 0 &&
+      source.weekStart <= 6
         ? Math.floor(source.weekStart)
         : 1;
     schedule.weekEnd =
-      typeof source.weekEnd === "number" && source.weekEnd >= 0 && source.weekEnd <= 6
+      typeof source.weekEnd === "number" &&
+      source.weekEnd >= 0 &&
+      source.weekEnd <= 6
         ? Math.floor(source.weekEnd)
         : 5;
   }
 
   if (mode === "monthly") {
     schedule.monthDay =
-      typeof source.monthDay === "number" && source.monthDay >= 1 && source.monthDay <= 31
+      typeof source.monthDay === "number" &&
+      source.monthDay >= 1 &&
+      source.monthDay <= 31
         ? Math.floor(source.monthDay)
         : 1;
   }
 
-  if (typeof source.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(source.time)) {
+  if (
+    typeof source.time === "string" &&
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(source.time)
+  ) {
     schedule.time = source.time;
   }
 
@@ -162,11 +179,15 @@ function isTodoDue(todo: Todo, now: Date) {
   if (schedule.mode === "weekly") {
     const start = schedule.weekStart ?? 1;
     const end = schedule.weekEnd ?? 5;
-    return isWeekdayInRange(now.getDay(), start, end) && isTimeReached(schedule, now);
+    return (
+      isWeekdayInRange(now.getDay(), start, end) && isTimeReached(schedule, now)
+    );
   }
 
   if (schedule.mode === "monthly") {
-    return now.getDate() === (schedule.monthDay ?? 1) && isTimeReached(schedule, now);
+    return (
+      now.getDate() === (schedule.monthDay ?? 1) && isTimeReached(schedule, now)
+    );
   }
 
   return isTimeReached(schedule, now);
@@ -215,11 +236,11 @@ function normalizeImportData(value: unknown): TodoData | null {
     .filter((todo): todo is IncomingTodo => {
       return Boolean(
         todo &&
-          typeof todo === "object" &&
-          "id" in todo &&
-          "name" in todo &&
-          (todo as IncomingTodo).id &&
-          typeof (todo as IncomingTodo).name === "string",
+        typeof todo === "object" &&
+        "id" in todo &&
+        "name" in todo &&
+        (todo as IncomingTodo).id &&
+        typeof (todo as IncomingTodo).name === "string",
       );
     })
     .map((todo) => ({
@@ -270,8 +291,8 @@ function supportsLocalFileAccess() {
   const pickerWindow = getPickerWindow();
   return Boolean(
     window.isSecureContext &&
-      pickerWindow.showOpenFilePicker &&
-      pickerWindow.showSaveFilePicker,
+    pickerWindow.showOpenFilePicker &&
+    pickerWindow.showSaveFilePicker,
   );
 }
 
@@ -294,7 +315,9 @@ async function getStoredFileHandle() {
     const request = transaction.objectStore(HANDLE_STORE_NAME).get(HANDLE_KEY);
 
     request.onsuccess = () =>
-      resolve((request.result as LocalFileSystemFileHandle | undefined) ?? null);
+      resolve(
+        (request.result as LocalFileSystemFileHandle | undefined) ?? null,
+      );
     request.onerror = () => reject(request.error);
     transaction.oncomplete = () => db.close();
   });
@@ -479,13 +502,14 @@ export default function Home() {
   const [localDbHandle, setLocalDbHandle] =
     useState<LocalFileSystemFileHandle | null>(null);
   const [newTodo, setNewTodo] = useState("");
-  const [newSchedule, setNewSchedule] =
-    useState<TodoSchedule>(defaultSchedule);
+  const [newSchedule, setNewSchedule] = useState<TodoSchedule>(defaultSchedule);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingSchedule, setEditingSchedule] =
     useState<TodoSchedule>(defaultSchedule);
   const [toast, setToast] = useState("");
+  const [isPasteImportOpen, setIsPasteImportOpen] = useState(false);
+  const [pastedJson, setPastedJson] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [canUseLocalFile, setCanUseLocalFile] = useState(false);
@@ -545,7 +569,9 @@ export default function Home() {
       }
 
       const stored = localStorage.getItem(LOCAL_DATA_KEY);
-      const storedData = stored ? normalizeImportData(JSON.parse(stored)) : null;
+      const storedData = stored
+        ? normalizeImportData(JSON.parse(stored))
+        : null;
       const nextData = applyDailyClear(storedData ?? emptyData);
       localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(nextData));
       setData(nextData);
@@ -614,7 +640,10 @@ export default function Home() {
       if (isAbortError(error)) {
         return;
       }
-      showToast(error instanceof Error ? error.message : "本地库连接失败", 2000);
+      showToast(
+        error instanceof Error ? error.message : "本地库连接失败",
+        2000,
+      );
     }
   }
 
@@ -751,6 +780,19 @@ export default function Home() {
     }
   }
 
+  async function importTodoData(imported: TodoData) {
+    if (
+      data.todos.length > 0 &&
+      !confirm(
+        `当前有 ${data.todos.length} 项任务，导入将覆盖全部数据，确认继续？`,
+      )
+    ) {
+      return null;
+    }
+
+    return saveData(imported);
+  }
+
   async function importData(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -765,19 +807,41 @@ export default function Home() {
         return;
       }
 
-      if (
-        data.todos.length > 0 &&
-        !confirm(
-          `当前有 ${data.todos.length} 项任务，导入将覆盖全部数据，确认继续？`,
-        )
-      ) {
+      const saved = await importTodoData(imported);
+      if (!saved) {
         return;
       }
 
-      const saved = await saveData(imported);
       showToast(`导入成功 (${saved.todos.length} 项)`, 1800);
     } catch {
       showToast("文件解析失败，请检查格式", 2000);
+    }
+  }
+
+  async function importPastedData() {
+    const text = pastedJson.trim();
+    if (!text) {
+      showToast("请先粘贴 JSON 数据", 1200);
+      return;
+    }
+
+    try {
+      const imported = normalizeImportData(JSON.parse(text));
+      if (!imported) {
+        showToast("无效的数据文件", 2000);
+        return;
+      }
+
+      const saved = await importTodoData(imported);
+      if (!saved) {
+        return;
+      }
+
+      setPastedJson("");
+      setIsPasteImportOpen(false);
+      showToast(`导入成功 (${saved.todos.length} 项)`, 1800);
+    } catch {
+      showToast("JSON 解析失败，请检查格式", 2000);
     }
   }
 
@@ -838,16 +902,27 @@ export default function Home() {
             <button
               className="btn-local"
               type="button"
-              title={localDbHandle ? `当前本地库: ${localDbHandle.name}` : "连接本地 db.json"}
+              title={
+                localDbHandle
+                  ? `当前本地库: ${localDbHandle.name}`
+                  : "连接本地 db.json"
+              }
               onClick={connectLocalDatabase}
             >
-              🗄️ {localDbHandle ? "本地" : "本地库"}
+              {localDbHandle ? "本地" : "本地库"}
+            </button>
+            <button className="btn-copy" type="button" onClick={copyExportData}>
+              复制
+            </button>
+            <button
+              className="btn-paste"
+              type="button"
+              onClick={() => setIsPasteImportOpen(true)}
+            >
+              粘贴
             </button>
             <button className="btn-export" type="button" onClick={exportData}>
               📤 导出
-            </button>
-            <button className="btn-copy" type="button" onClick={copyExportData}>
-              📋 复制
             </button>
             <button
               className="btn-import"
@@ -974,6 +1049,47 @@ export default function Home() {
         className="import-file-input"
         onChange={importData}
       />
+      {isPasteImportOpen && (
+        <div className="import-modal" role="dialog" aria-modal="true">
+          <div className="import-dialog">
+            <div className="import-dialog-header">
+              <h2>粘贴 JSON 导入</h2>
+              <button
+                type="button"
+                title="关闭"
+                onClick={() => setIsPasteImportOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <textarea
+              value={pastedJson}
+              placeholder="粘贴导出的 JSON 数据"
+              onChange={(event) => setPastedJson(event.target.value)}
+            />
+            <div className="import-dialog-actions">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  setPastedJson("");
+                  setIsPasteImportOpen(false);
+                }}
+              >
+                取消
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={isSaving}
+                onClick={importPastedData}
+              >
+                导入
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className={`toast ${toast ? "show" : ""}`}>{toast}</div>
     </>
   );

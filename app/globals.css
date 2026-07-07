@@ -96,6 +96,15 @@ button {
   background: #c7eac7;
 }
 
+.header-actions .btn-paste {
+  background: #e4faf7;
+  color: #17635e;
+}
+
+.header-actions .btn-paste:active {
+  background: #d3ebe8;
+}
+
 .header-actions .btn-local {
   background: #f3edf7;
   color: #5b3a7a;
@@ -449,6 +458,101 @@ button {
 
 .import-file-input {
   display: none;
+}
+
+.import-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.import-dialog {
+  width: min(100%, 480px);
+  padding: 14px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22);
+}
+
+.import-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.import-dialog-header h2 {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.import-dialog-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+}
+
+.import-dialog textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1.5px solid #dce1e9;
+  border-radius: 8px;
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.import-dialog textarea:focus {
+  border-color: #4f8cf7;
+}
+
+.import-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.import-dialog-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.import-dialog-actions .btn-secondary {
+  background: #eef2f6;
+  color: #1e293b;
+}
+
+.import-dialog-actions .btn-primary {
+  background: #4f8cf7;
+  color: #ffffff;
+}
+
+.import-dialog-actions button:disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .toast {
